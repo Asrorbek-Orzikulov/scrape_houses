@@ -6,6 +6,7 @@ import re
 import math 
 from datetime import date, timedelta
 import os
+import pathlib
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0",
@@ -382,7 +383,7 @@ def scrape_everything():
                     'playground', 'kindergarten', 'park', 'recreation', 'school',
                     'restaurant', 'supermarket', 'title_text', 'post_text']
     df = pd.DataFrame(columns=column_names)
-    commission_list = ['no']  # , 'yes'  # TODO
+    commission_list = ['yes']  # , 'no'  # TODO
     furnished_list = ['yes', 'no']
     home_type_list = ['novostroyki', 'vtorichnyy-rynok']
     district_code_list = [20, 18, 13, 12, 19, 21, 23, 24, 25, 26, 22]
@@ -391,7 +392,8 @@ def scrape_everything():
     # home_type_list = ['novostroyki']
     # district_code_list = [20]
     today = date.today().strftime("%d-%m-%Y")
-
+    home_path = pathlib.Path.home()
+    os.chdir(os.path.join(home_path, "Downloads"))
     for commission in commission_list:
         for furnished in furnished_list:
             for home_type in home_type_list:
@@ -406,7 +408,6 @@ def scrape_everything():
                     finally:
                         print(f'Number of observations scraped: {len(df)}.')
 
-    os.chdir("C:/Users/a.orzikulov/Downloads")  # "/Users/asrorbek/Downloads"
     df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
         ['yes', 'no'], [True, False])
     df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
