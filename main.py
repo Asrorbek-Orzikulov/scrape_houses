@@ -398,11 +398,13 @@ def scrape_everything():
                 for district_code in district_code_list:
                     print(f'Analyzing commission={commission}, furnished={furnished},'
                           f' home_type={home_type} for {district_dict[district_code]}')
-                    print(f'Number of observations scraped: {len(df)}.')
                     try:
                         scrape_section(df, commission, furnished, home_type, district_code)
+                        df.to_excel(f'{today} df_clean.xlsx', index=False, encoding="utf-8")
                     except:
                         pass
+                    finally:
+                        print(f'Number of observations scraped: {len(df)}.')
 
     os.chdir("/Users/asrorbek/Downloads")  # "C:/Users/a.orzikulov/Downloads"
     today = date.today().strftime("%d-%m-%Y")
