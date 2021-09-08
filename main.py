@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
-from scrapy import Selector
-import requests
 import re
-import math 
-from datetime import date, timedelta
-import os
-import pathlib
+import datetime
+from scrapy import Selector
+from requests import get
+from math import ceil
+from os import path, chdir
+from pathlib import Path
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:66.0) Gecko/20100101 Firefox/66.0",
@@ -15,26 +15,19 @@ HEADERS = {
 }
 
 # date
-today = date.today()
-yesterday = today - timedelta(days=1)
+today = datetime.date.today()
+yesterday = today - datetime.timedelta(days=1)
 today = today.strftime("%d-%m-%Y")
 yesterday = yesterday.strftime("%d-%m-%Y")
 
 # USD-UZS exchange rate
 fx_rate_url = 'https://cbu.uz/oz/'
-fx_rate_html = requests.get(fx_rate_url, headers=HEADERS).content
+fx_rate_html = get(fx_rate_url, headers=HEADERS).content
 fx_rate_selector = Selector(text=fx_rate_html)
 fx_rate_xpath = '//div[@class="exchange__content"]//div[@class="exchange__item_value"]'
 fx_rates = fx_rate_selector.xpath(fx_rate_xpath)
 fx_rates = fx_rates.xpath('./text()').extract()
 USD_to_UZS = float(fx_rates[0].replace(" = ", ""))
-
-apartment_feature = ['Интернет', 'Телефон', 'Стиральная машина',
-                     'Телевизор', 'Кондиционер', 'Холодильник']
-
-neighbourhood = ['Больница', 'Детская площадка', 'Детский сад',
-                 'Парк', 'Развлекательные заведения',
-                 'Рестораны', 'Школа', 'Супермаркет']
 
 district_dict = {20: 'Olmazor', 18: 'Bektemir', 13: 'Mirobod', 12: 'Mirzo-Ulugbek',
                  19: 'Sergeli', 21: 'Uchtepa', 23: 'Chilonzor', 24: 'Shayhontohur',
@@ -67,7 +60,7 @@ def scrape_announcement(dataframe, selector):
 
     """
     ad_link = selector.xpath("./@href").extract_first()
-    html = requests.get(ad_link, headers=HEADERS).content
+    html = get(ad_link, headers=HEADERS).content
     html_selector = Selector(text=html)
     row = dataframe.shape[0]
     dataframe.at[row, 'link'] = ad_link
@@ -269,7 +262,7 @@ def scrape_announcement(dataframe, selector):
         dataframe.at[row, 'recreation'] = True
     else:
         dataframe.at[row, 'recreation'] = False
-        
+
     if 'Рестораны' in close_things:
         dataframe.at[row, 'restaurant'] = True
     else:
@@ -312,7 +305,7 @@ def scrape_page(df, section_url, page):
 
     """    
     page_url = section_url + f'&page={page}'
-    html = requests.get(page_url, headers=HEADERS).content
+    html = get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     ad_links_xpath = '//*[@id="offers_table"]//a[@class="marginright5 link linkWithHash detailsLink"]'
     ad_links = html_selector.xpath(ad_links_xpath)
@@ -321,6 +314,7 @@ def scrape_page(df, section_url, page):
             scrape_announcement(df, advertisement)
         except:
             pass
+
 
 def scrape_section(df, commission, furnished, home_type, district_code):
     """
@@ -349,19 +343,18 @@ def scrape_section(df, commission, furnished, home_type, district_code):
 
     """      
     page_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
-         f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
-         f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
-         f'district_id%5D={district_code}'
-    html = requests.get(page_url, headers=HEADERS).content
+        f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
+        f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
+        f'district_id%5D={district_code}'
+    html = get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     num_ads_xpath = '//*[@id="offers_table"]//div[@class="dontHasPromoted section clr rel"]/h2'
     number_ads = html_selector.xpath(num_ads_xpath)
     number_ads = number_ads.xpath('.//text()').extract_first()
-    number_ads = re.findall('[0-9]+\s?[0-9]+', number_ads)
+    number_ads = re.findall(r'[0-9]+\s?[0-9]*', number_ads)
     number_ads = number_ads[0].replace(" ", "")
     number_ads = int(number_ads)
-    num_pages = math.ceil(number_ads/39)
-    # num_pages = min(num_pages, 2) # TODO
+    num_pages = ceil(number_ads/39)
     for page in range(1, num_pages + 1):
         try:
             scrape_page(df, page_url, page)
@@ -389,14 +382,9 @@ def scrape_everything():
     commission_list = ['yes', 'no']
     furnished_list = ['yes', 'no']
     home_type_list = ['novostroyki', 'vtorichnyy-rynok']
-    district_code_list = [20, 18, 13]  #, 12, 19, 21, 23, 24, 25, 26, 22
-    # commission_list = ['no']
-    # furnished_list = ['no']
-    # home_type_list = ['novostroyki']
-    # district_code_list = [20]
-    today = date.today().strftime("%d-%m-%Y")
-    home_path = pathlib.Path.home()
-    os.chdir(os.path.join(home_path, "Downloads"))
+    district_code_list = [20, 18, 13, 12, 19, 21, 23, 24, 25, 26, 22]
+    home_path = Path.home()
+    chdir(path.join(home_path, "Downloads"))
     for commission in commission_list:
         for furnished in furnished_list:
             for home_type in home_type_list:
@@ -405,7 +393,7 @@ def scrape_everything():
                           f' home_type={home_type} for {district_dict[district_code]}')
                     try:
                         scrape_section(df, commission, furnished, home_type, district_code)
-                        df.to_excel(f'{today} df_clean.xlsx', index=False, encoding="utf-8")
+                        df.to_excel(f'{today} database.xlsx', index=False, encoding="utf-8")
                     except:
                         pass
                     finally:
@@ -414,13 +402,11 @@ def scrape_everything():
     df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
         ['Да', 'Нет'], [True, False])
     df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
-    # df.loc[:, 'home_type'] = df.loc[:, 'home_type'].replace(
-    #     {'Вторичный рынок': 'vtorichka', 'Новостройки': 'novostroyka'})
     df['price_m2'] = df['price'].div(df['area'])
     df.drop_duplicates(subset=column_names, inplace=True)
     df.dropna(how="all", inplace=True,
               subset=["price", 'num_rooms', 'area', 'apart_floor', 'home_floor'])
-    df.to_excel(f'{today} df_clean.xlsx', index=False, encoding="utf-8")
+    df.to_excel(f'{today} database.xlsx', index=False, encoding="utf-8")
     return df
 
 
