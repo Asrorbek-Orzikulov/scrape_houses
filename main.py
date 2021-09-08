@@ -47,9 +47,9 @@ month_dict = {" г.": "", ' января ': '-01-', ' февраля ': '-02-', 
               re.compile("^Сегодня.*"): today, re.compile("^Вчера.*"): yesterday}
 
 
-def scrape_announcement(dataframe, selector, commission, furnished, home_type, district_code):
+def scrape_announcement(dataframe, selector):
     """
-    Scrape an individual OLX announcement with the given parameters.
+    Scrape an individual OLX announcement given its link.
 
     Modifies the dataframe that is passed as an argument.
 
@@ -60,15 +60,6 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         from the announcements.
     selector : scrapy.Selector
         Selector containing the link of the announcement.
-    commission : str
-        `yes` or `no` depending on if a broker commission is paid upon purchase.
-    furnished : str
-        `yes` or `no` depending on if a house is furnished.
-    home_type : str
-        It is either `novostroyki` or `vtorichnyy-rynok`.
-    district_code : int
-        Code of the district. Refer to `district_dict` to find a code for
-        the district  needed.
 
     Returns
     -------
@@ -81,14 +72,15 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
     row = dataframe.shape[0]
     dataframe.at[row, 'link'] = ad_link
 
-    # home type, furnished, commissions, district
-    dataframe.at[row, 'home_type'] = home_type
-    dataframe.at[row, 'furnished'] = furnished
-    dataframe.at[row, 'commission'] = commission
-    dataframe.at[row, 'district'] = district_dict[district_code]
+    try:
+        district_list = html_selector.xpath('//*[@id="root"]//a/text()').extract()
+        district_pattern = re.compile(r"Продажа - (.*) район")
+        district = list(filter(district_pattern.match, district_list))[0]
+        district = re.sub(district_pattern, r"\1", district)
+        dataframe.at[row, 'district'] = district
+    except:
+        pass
 
-    # Extracting Features
-    # Date
     try:
         date = html_selector.xpath('//*[@id="root"]/div[1]/div[3]/div[2]/div[1]/div[2]/div[1]/span/span')
         date = date.xpath(".//text()").extract_first()
@@ -96,7 +88,6 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
     except:
         pass
 
-    # Price
     try:
         price_list = html_selector.xpath(
             '//*[@id="root"]/div[1]/div[3]/div[2]/div[1]/div[2]/div[3]/h3')
@@ -116,6 +107,14 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         other_details = other_details.xpath('.//text()').extract()
     except:
         other_details = ""
+
+    try:
+        home_type_pattern = re.compile(r"Тип жилья: (.*)")
+        home_type = list(filter(home_type_pattern.match, other_details))[0]
+        home_type = re.sub(home_type_pattern, r"\1", home_type)
+        dataframe.at[row, 'home_type'] = home_type
+    except:
+        pass
 
     try:
         rooms_pattern = re.compile(r"Количество комнат: (\d+).*")
@@ -160,7 +159,7 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         dataframe.at[row, 'build_type'] = building_type
     except:
         pass
-    
+
     try:
         plan_pattern = re.compile(r"Планировка: (.*)")
         plan = list(filter(plan_pattern.match, other_details))[0]
@@ -187,6 +186,14 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         pass
 
     try:
+        furnished_pattern = re.compile(r"Меблирована: (.*)")
+        furnished = list(filter(furnished_pattern.match, other_details))[0]
+        furnished = re.sub(furnished_pattern, r"\1", furnished)
+        dataframe.at[row, 'furnished'] = furnished
+    except:
+        pass
+
+    try:
         height_pattern = re.compile(r"Высота потолков: (.*)")
         height = list(filter(height_pattern.match, other_details))[0]
         height = re.sub(height_pattern, r"\1", height)
@@ -199,12 +206,20 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         dataframe.at[row, 'ceil_height'] = height
     except:
         pass
-        
+
     try:
         condition_pattern = re.compile(r"Ремонт: (.*)")
         condition = list(filter(condition_pattern.match, other_details))[0]
         condition = re.sub(condition_pattern, r"\1", condition)
         dataframe.at[row, 'condition'] = condition
+    except:
+        pass
+
+    try:
+        commission_pattern = re.compile(r"Комиссионные: (.*)")
+        commission = list(filter(commission_pattern.match, other_details))[0]
+        commission = re.sub(commission_pattern, r"\1", commission)
+        dataframe.at[row, 'commission'] = commission
     except:
         pass
 
@@ -271,7 +286,7 @@ def scrape_announcement(dataframe, selector, commission, furnished, home_type, d
         dataframe.at[row, 'supermarket'] = False
 
 
-def scrape_page(df, commission, furnished, home_type, district_code, page):
+def scrape_page(df, section_url, page):
     """
     Scrape an OLX page that usually contains 39 individual announcements.
     If the page is the last page of the section, it may contain fewer than
@@ -284,17 +299,10 @@ def scrape_page(df, commission, furnished, home_type, district_code, page):
     df : pandas DataFrame
         Dataframe whose rows will contain the information gathered from
         individual announcements.
-    commission : str
-        `yes` or `no` depending on if a broker commission is paid upon purchase.
-    furnished : str
-        `yes` or `no` depending on if a house is furnished.
-    home_type : str
-        It is either `novostroyki` or `vtorichnyy-rynok`.
-    district_code : int
-        Code of the district. Refer to `district_dict` to find a code for
-        the district  needed.
+    section_url : str
+        url of the OLX section to be scraped.
     page : int
-        The page number of the section to be scraped. This number is 
+        The page number of the section to be scraped. This number is
         shown at the bottom of a web-page when necessary filters are
         applied to find an apartment/house.
 
@@ -303,19 +311,14 @@ def scrape_page(df, commission, furnished, home_type, district_code, page):
     None.
 
     """    
-    page_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
-         f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
-         f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
-         f'district_id%5D={district_code}&page={page}'
-
+    page_url = section_url + f'&page={page}'
     html = requests.get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     ad_links_xpath = '//*[@id="offers_table"]//a[@class="marginright5 link linkWithHash detailsLink"]'
     ad_links = html_selector.xpath(ad_links_xpath)
     for advertisement in ad_links:
         try:
-            scrape_announcement(df, advertisement, commission, furnished, 
-                                home_type, district_code)
+            scrape_announcement(df, advertisement)
         except:
             pass
 
@@ -338,7 +341,7 @@ def scrape_section(df, commission, furnished, home_type, district_code):
         It is either `novostroyki` or `vtorichnyy-rynok`.
     district_code : int
         Code of the district. Refer to `district_dict` to find a code for
-        the district  needed.
+        the district needed.
 
     Returns
     -------
@@ -361,7 +364,7 @@ def scrape_section(df, commission, furnished, home_type, district_code):
     # num_pages = min(num_pages, 2) # TODO
     for page in range(1, num_pages + 1):
         try:
-            scrape_page(df, commission, furnished, home_type, district_code, page)
+            scrape_page(df, page_url, page)
         except:
             pass
 
@@ -383,10 +386,10 @@ def scrape_everything():
                     'playground', 'kindergarten', 'park', 'recreation', 'school',
                     'restaurant', 'supermarket', 'title_text', 'post_text']
     df = pd.DataFrame(columns=column_names)
-    commission_list = ['yes']  # , 'no'  # TODO
+    commission_list = ['yes', 'no']
     furnished_list = ['yes', 'no']
     home_type_list = ['novostroyki', 'vtorichnyy-rynok']
-    district_code_list = [20, 18, 13, 12, 19, 21, 23, 24, 25, 26, 22]
+    district_code_list = [20, 18, 13]  #, 12, 19, 21, 23, 24, 25, 26, 22
     # commission_list = ['no']
     # furnished_list = ['no']
     # home_type_list = ['novostroyki']
@@ -409,11 +412,11 @@ def scrape_everything():
                         print(f'Number of observations scraped: {len(df)}.')
 
     df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
-        ['yes', 'no'], [True, False])
+        ['Да', 'Нет'], [True, False])
     df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
-    df.loc[:, 'home_type'] = df.loc[:, 'home_type'].replace(
-        {'vtorichnyy-rynok': 'vtorichka', 'novostroyki': 'novostroyka'})
-    df['price_psqm'] = df['price'].div(df['area'])
+    # df.loc[:, 'home_type'] = df.loc[:, 'home_type'].replace(
+    #     {'Вторичный рынок': 'vtorichka', 'Новостройки': 'novostroyka'})
+    df['price_m2'] = df['price'].div(df['area'])
     df.drop_duplicates(subset=column_names, inplace=True)
     df.dropna(how="all", inplace=True,
               subset=["price", 'num_rooms', 'area', 'apart_floor', 'home_floor'])
