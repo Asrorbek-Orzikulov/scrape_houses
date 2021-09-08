@@ -301,12 +301,12 @@ def scrape_page(df, commission, furnished, home_type, district_code, page):
     -------
     None.
 
-    """
+    """    
     page_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
-        f'/tashkent/?search%5Bfilter_float_price%3Afrom%5D=50000000&search%5B'\
-        f'filter_enum_furnished%5D%5B0%5D={furnished}&search%5Bfilter_enum_commission'\
-        f'%5D%5B0%5D={commission}&search%5Border%5D=created_at%3Adesc&search%5Bdistrict_id'\
-        f'%5D={district_code}&page={page}'  
+         f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
+         f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
+         f'district_id%5D={district_code}&page={page}'
+
     html = requests.get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     ad_links_xpath = '//*[@id="offers_table"]//a[@class="marginright5 link linkWithHash detailsLink"]'
@@ -317,7 +317,6 @@ def scrape_page(df, commission, furnished, home_type, district_code, page):
                                 home_type, district_code)
         except:
             pass
-
 
 def scrape_section(df, commission, furnished, home_type, district_code):
     """
@@ -346,10 +345,9 @@ def scrape_section(df, commission, furnished, home_type, district_code):
 
     """      
     page_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
-        f'/tashkent/?search%5Bfilter_float_price%3Afrom%5D=50000000&search%5B'\
-        f'filter_enum_furnished%5D%5B0%5D={furnished}&search%5Bfilter_enum_commission'\
-        f'%5D%5B0%5D={commission}&search%5Border%5D=created_at%3Adesc&search%5Bdistrict_id'\
-        f'%5D={district_code}&page=1'    
+         f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
+         f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
+         f'district_id%5D={district_code}'
     html = requests.get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     num_ads_xpath = '//*[@id="offers_table"]//div[@class="dontHasPromoted section clr rel"]/h2'
@@ -384,7 +382,7 @@ def scrape_everything():
                     'playground', 'kindergarten', 'park', 'recreation', 'school',
                     'restaurant', 'supermarket', 'title_text', 'post_text']
     df = pd.DataFrame(columns=column_names)
-    commission_list = ['yes']  # , 'no'
+    commission_list = ['no']  # , 'yes'  # TODO
     furnished_list = ['yes', 'no']
     home_type_list = ['novostroyki', 'vtorichnyy-rynok']
     district_code_list = [20, 18, 13, 12, 19, 21, 23, 24, 25, 26, 22]
@@ -408,7 +406,7 @@ def scrape_everything():
                     finally:
                         print(f'Number of observations scraped: {len(df)}.')
 
-    os.chdir("/Users/asrorbek/Downloads")  # "C:/Users/a.orzikulov/Downloads"
+    os.chdir("C:/Users/a.orzikulov/Downloads")  # "/Users/asrorbek/Downloads"
     df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
         ['yes', 'no'], [True, False])
     df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
