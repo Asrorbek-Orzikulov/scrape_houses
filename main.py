@@ -40,30 +40,29 @@ month_dict = {" г.": "", ' января ': '-01-', ' февраля ': '-02-', 
               re.compile("^Сегодня.*"): today, re.compile("^Вчера.*"): yesterday}
 
 
-def scrape_announcement(dataframe, selector):
+def scrape_announcement(dataframe, url):
     """
-    Scrape an individual OLX announcement given its link.
+    Scrape an individual OLX announcement given its url.
 
-    Modifies the dataframe that is passed as an argument.
+    Modifies the dataframe that is passed as an argument.    
 
     Parameters
     ----------
     dataframe : pandas DataFrame
         Dataframe whose rows will contain the information gathered 
         from the announcements.
-    selector : scrapy.Selector
-        Selector containing the link of the announcement.
+    url : str
+        url of the OLX announcement to be scraped.
 
     Returns
     -------
     None.
 
     """
-    ad_link = selector.xpath("./@href").extract_first()
-    html = get(ad_link, headers=HEADERS).content
+    html = get(url, headers=HEADERS).content
     html_selector = Selector(text=html)
     row = dataframe.shape[0]
-    dataframe.at[row, 'link'] = ad_link
+    dataframe.at[row, 'link'] = url
 
     try:
         district_list = html_selector.xpath('//*[@id="root"]//a/text()').extract()
@@ -279,7 +278,7 @@ def scrape_announcement(dataframe, selector):
         dataframe.at[row, 'supermarket'] = False
 
 
-def scrape_page(df, section_url, page):
+def scrape_page(df, section_url, page, included_ads):
     """
     Scrape an OLX page that usually contains 39 individual announcements.
     If the page is the last page of the section, it may contain fewer than
@@ -298,6 +297,8 @@ def scrape_page(df, section_url, page):
         The page number of the section to be scraped. This number is
         shown at the bottom of a web-page when necessary filters are
         applied to find an apartment/house.
+    included_ads : set
+        Set containing the links of already included announcement.
 
     Returns
     -------
@@ -308,15 +309,18 @@ def scrape_page(df, section_url, page):
     html = get(page_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     ad_links_xpath = '//*[@id="offers_table"]//a[@class="marginright5 link linkWithHash detailsLink"]'
-    ad_links = html_selector.xpath(ad_links_xpath)
-    for advertisement in ad_links:
+    ad_link_selectors = html_selector.xpath(ad_links_xpath)
+    for ad_selector in ad_link_selectors:
         try:
-            scrape_announcement(df, advertisement)
+            ad_link = ad_selector.xpath("./@href").extract_first()
+            if ad_link not in included_ads:
+                scrape_announcement(df, ad_link)
+                included_ads.add(ad_link)
         except:
             pass
 
 
-def scrape_section(df, commission, furnished, home_type, district_code):
+def scrape_section(df, commission, furnished, home_type, district_code, included_ads):
     """
     Scrape all announcements of an OLX section with the given parameters.
 
@@ -336,17 +340,19 @@ def scrape_section(df, commission, furnished, home_type, district_code):
     district_code : int
         Code of the district. Refer to `district_dict` to find a code for
         the district needed.
+    included_ads : set
+        Set containing the links of already included announcement.
 
     Returns
     -------
     None.
 
     """      
-    page_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
+    section_url = f'https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{home_type}'\
         f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
         f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
         f'district_id%5D={district_code}'
-    html = get(page_url, headers=HEADERS).content
+    html = get(section_url, headers=HEADERS).content
     html_selector = Selector(text=html)
     num_ads_xpath = '//*[@id="offers_table"]//div[@class="dontHasPromoted section clr rel"]/h2'
     number_ads = html_selector.xpath(num_ads_xpath)
@@ -357,7 +363,7 @@ def scrape_section(df, commission, furnished, home_type, district_code):
     num_pages = ceil(number_ads/39)
     for page in range(1, num_pages + 1):
         try:
-            scrape_page(df, page_url, page)
+            scrape_page(df, section_url, page, included_ads)
         except:
             pass
 
@@ -372,19 +378,26 @@ def scrape_everything():
     None.
 
     """
+    home_path = Path.home()
+    chdir(path.join(home_path, "Downloads"))
+    database_name = f'{today} database.xlsx'
     column_names = ['link', 'date', 'price', 'home_type', 'district',
                     'furnished', 'commission', 'num_rooms', 'area', 'apart_floor',
                     'home_floor', 'condition', 'build_type', 'build_plan',
                     'build_year', 'bathroom', 'ceil_height', 'hospital', 
                     'playground', 'kindergarten', 'park', 'recreation', 'school',
                     'restaurant', 'supermarket', 'title_text', 'post_text']
-    df = pd.DataFrame(columns=column_names)
+    if path.isfile(database_name):
+        df = pd.read_excel(database_name)
+        included_ads = set(df.link)
+    else:
+        df = pd.DataFrame(columns=column_names)
+        included_ads = set()
+
     commission_list = ['yes', 'no']
     furnished_list = ['yes', 'no']
     home_type_list = ['novostroyki', 'vtorichnyy-rynok']
     district_code_list = [20, 18, 13, 12, 19, 21, 23, 24, 25, 26, 22]
-    home_path = Path.home()
-    chdir(path.join(home_path, "Downloads"))
     for commission in commission_list:
         for furnished in furnished_list:
             for home_type in home_type_list:
@@ -392,8 +405,9 @@ def scrape_everything():
                     print(f'Analyzing commission={commission}, furnished={furnished},'
                           f' home_type={home_type} for {district_dict[district_code]}')
                     try:
-                        scrape_section(df, commission, furnished, home_type, district_code)
-                        df.to_excel(f'{today} database.xlsx', index=False, encoding="utf-8")
+                        scrape_section(df, commission, furnished, home_type,
+                                       district_code, included_ads)
+                        df.to_excel(database_name, index=False, encoding="utf-8")
                     except:
                         pass
                     finally:
@@ -404,9 +418,9 @@ def scrape_everything():
     df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
     df['price_m2'] = df['price'].div(df['area'])
     df.drop_duplicates(subset=column_names, inplace=True)
-    df.dropna(how="all", inplace=True,
-              subset=["price", 'num_rooms', 'area', 'apart_floor', 'home_floor'])
-    df.to_excel(f'{today} database.xlsx', index=False, encoding="utf-8")
+    # df.dropna(how="all", inplace=True,
+    #           subset=["price", 'num_rooms', 'area', 'apart_floor', 'home_floor'])
+    df.to_excel(database_name, index=False, encoding="utf-8")
     return df
 
 
