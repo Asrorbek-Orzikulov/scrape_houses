@@ -5,9 +5,11 @@ import datetime
 from scrapy import Selector
 from requests import get
 from math import ceil
-from pathlib import Path
 from glob import glob
-from os import path, chdir, getcwd
+from os import path, chdir, mkdir, getcwd
+from tkinter import messagebox
+
+from util import log
 
 
 class ScraperOLX:
@@ -25,7 +27,7 @@ class ScraperOLX:
 
         # getting the exchange rate from www.cbu.uz
         fx_rate_url = 'https://cbu.uz/oz/'
-        fx_rate_html = get(fx_rate_url, headers=HEADERS).content
+        fx_rate_html = get(fx_rate_url, headers=self.headers).content
         fx_rate_selector = Selector(text=fx_rate_html)
         fx_rate_xpath = '//div[@class="exchange__content"]//div[@class="exchange__item_value"]'
         fx_rates = fx_rate_selector.xpath(fx_rate_xpath)
@@ -43,7 +45,6 @@ class ScraperOLX:
             ' октября ': '-10-', ' ноября ': '-11-', ' декабря ': '-12-',
             re.compile("^Сегодня.*"): self.today, re.compile("^Вчера.*"): self.yesterday
         }
-
 
     def scrape_announcement(self, dataframe, url):
         """
@@ -65,7 +66,7 @@ class ScraperOLX:
         None.
 
         """
-        html = get(url, headers=HEADERS).content
+        html = get(url, headers=self.headers).content
         html_selector = Selector(text=html)
         row = dataframe.shape[0]
         dataframe.at[row, 'link'] = url
@@ -288,7 +289,6 @@ class ScraperOLX:
         else:
             dataframe.at[row, 'supermarket'] = False
 
-
     def scrape_page(self, df, section_url, page):
         """
         Scrape an OLX page that usually contains 39 individual announcements.
@@ -315,17 +315,16 @@ class ScraperOLX:
 
         """
         page_url = section_url + f'&page={page}'
-        html = get(page_url, headers=HEADERS).content
+        html = get(page_url, headers=self.headers).content
         html_selector = Selector(text=html)
         ad_links_xpath = '//*[@id="offers_table"]//a[@class="marginright5 link linkWithHash detailsLink"]'
         ad_links = html_selector.xpath(ad_links_xpath)
         ad_links = ad_links.xpath("./@href").extract()
         for advertisement in ad_links:
             try:
-                scrape_announcement(df, advertisement)
+                self.scrape_announcement(df, advertisement)
             except:
                 pass
-
 
     def scrape_section(self, df, commission, furnished, home_type, district_code):
         """
@@ -357,7 +356,7 @@ class ScraperOLX:
             f'/tashkent/?search%5Bfilter_enum_furnished%5D%5B0%5D={furnished}&search'\
             f'%5Bfilter_enum_comission%5D%5B0%5D={commission}&search%5B'\
             f'district_id%5D={district_code}'
-        html = get(section_url, headers=HEADERS).content
+        html = get(section_url, headers=self.headers).content
         html_selector = Selector(text=html)
         num_ads_xpath = '//*[@id="offers_table"]//div[@class="dontHasPromoted section clr rel"]/h2'
         number_ads = html_selector.xpath(num_ads_xpath)
@@ -369,12 +368,11 @@ class ScraperOLX:
         num_pages = min(num_pages, 2)  # TODO
         for page in range(1, num_pages + 1):
             try:
-                scrape_page(df, section_url, page)
+                self.scrape_page(df, section_url, page)
             except:
                 pass
 
-
-    def scrape_everything():
+    def scrape_everything(self):
         """
         Scrape all announcements on OLX.uz that are about the sale of
         apartments in Tashkent.
@@ -384,23 +382,16 @@ class ScraperOLX:
         None.
 
         """
-        home_path = Path.home()
-        chdir(path.join(home_path, "Downloads"))
+        if not path.isdir("temporary_files"):
+            mkdir("temporary_files")
+
+        chdir("temporary_files")
         column_names = ['link', 'date', 'price', 'home_type', 'district', 'price_m2',
                         'furnished', 'commission', 'num_rooms', 'area', 'apart_floor',
                         'home_floor', 'condition', 'build_type', 'build_plan',
                         'build_year', 'bathroom', 'ceil_height', 'hospital',
                         'playground', 'kindergarten', 'park', 'recreation', 'school',
                         'restaurant', 'supermarket', 'title_text', 'post_text']
-
-        # database_name_pkl = f'{today} database.pkl.zip'
-        # database_name_excel = f'{today} database.xlsx'
-
-        # if path.isfile(database_name_excel):
-        #     df = pd.read_excel(database_name_excel)
-        # else:
-        #     df = pd.DataFrame(columns=column_names)
-
         commission_list = ['yes', 'no']
         furnished_list = ['yes', 'no']
         home_type_list = ['novostroyki', 'vtorichnyy-rynok']
@@ -409,53 +400,89 @@ class ScraperOLX:
             for furnished in furnished_list:
                 for home_type in home_type_list:
                     for district_code in district_code_list:
-                        print(f'Analyzing commission={commission}, furnished={furnished},'
-                              f' home_type={home_type} for {district_dict[district_code]}')
-                        filename_pkl = f'{today}-{commission}-{furnished}-{home_type}-'\
-                            f'{district_dict[district_code]}.pkl'
+                        log("info", f'Analyzing commission={commission}, furnished={furnished},'
+                              f' home_type={home_type} for {self.district_dict[district_code]}')
+                        filename_pkl = f'{self.today}-{commission}-{furnished}-{home_type}-'\
+                            f'{self.district_dict[district_code]}.pkl'
                         if path.isfile(filename_pkl):
-                            print(filename_pkl, "already exists.")
+                            log("info", filename_pkl, "already exists.")
                             continue
                         else:
                             df = pd.DataFrame(columns=column_names)
                             try:
-                                scrape_section(df, commission, furnished, home_type, district_code)
-                                df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
-                                # df.dropna(how="all", inplace=True,
-                                #           subset=["price", 'num_rooms', 'area', 'apart_floor'])
+                                self.scrape_section(df, commission, furnished, home_type, district_code)
+                                df.loc[:, 'date'] = df.loc[:, 'date'].replace(self.month_dict, regex=True)
+                                df.dropna(how="all", inplace=True,
+                                          subset=["price", 'num_rooms', 'area', 'apart_floor'])
                                 df.to_pickle(filename_pkl)
-                                print(f'Number of observations scraped: {len(df)}.')
+                                log("info", f'Number of observations scraped: {len(df)}.')
                             except:
                                 pass
+        chdir("..")
 
         # df.drop_duplicates(subset=column_names, inplace=True)
         # df.to_excel(database_name_excel, index=False, encoding="utf-8")
 
-    def create_excel():
-        home_path = Path.home()
-        chdir(path.join(home_path, "Downloads"))
-        filename = f'{today} merged.pkl.zip'
+    def create_excel(self):
+        if not path.isdir("Database"):
+            self.create_messagebox('Database folder does not exist.')
+            return
+
+        chdir("Database")
+        filename = f'{self.today} merged.pkl.zip'  # TODO
         if not path.isfile(filename):
-            print(f'{filename} does not exist.')
+            self.create_messagebox(f'{filename} does not exist.')
+            chdir("..")
             return
 
         dataframe = pd.read_pickle(filename)
-        filename_new = f'{today} merged.xlsx'
+        filename_new = f'{self.today} merged.xlsx'
         dataframe.to_excel(filename_new, index=False, encoding="utf-8")
-        print(f'{filename_new} has been created.')
+        self.create_messagebox(f'{filename_new} has been created.', False)
+        chdir("..")
 
+    def merge_district_pickles(self):
+        if not path.isdir("temporary_files"):
+            self.create_messagebox('temporary_files folder does not exist.')
+            return            
 
-    def merge_pickles():
-        home_path = Path.home()
-        chdir(path.join(home_path, "Downloads"))
-        filenames_pattern = f'{today}-*pkl'
+        chdir("temporary_files")
+        filenames_pattern = f'{self.today}-*pkl'
         all_filenames = [file for file in glob(filenames_pattern)]
         if not all_filenames:
-            print(f'Pickle files do not exist in {getcwd()}')
+            self.create_messagebox(f'Pickle files do not exist in {getcwd()}')
+            chdir("..")
             return
 
         print(f'Found {len(all_filenames)} files to merge.')
         merged_data = pd.concat([pd.read_pickle(file) for file in all_filenames])
-        merged_filename = f'{today} merged.pkl.zip'
+        chdir("..")
+
+        if not path.isdir("Database"):
+            mkdir("Database")
+        chdir("Database")
+        merged_filename = f'{self.today} merged.pkl.zip'
         merged_data.to_pickle(merged_filename)
-        print(f'{merged_filename} has been created.')
+        self.create_messagebox(f'{merged_filename} has been created.', False)
+        chdir("..")
+        
+    def merge_month_pickles(self):
+        if not path.isdir("Database"):
+            self.create_messagebox('Database folder does not exist.')
+            return
+
+        chdir("Database")
+        filenames_pattern = "Hey"  # TODO
+        
+
+        chdir("..")
+        
+
+        
+        
+
+    def create_messagebox(self, text, is_error=True):
+        if is_error:
+            messagebox.showerror(title="Saving Request", message=text)
+        else:
+            messagebox.showinfo(title="Saving Request", message=text)

@@ -4,4 +4,3 @@ from colorama import init as colorama
 
 def main():
     colorama()
-

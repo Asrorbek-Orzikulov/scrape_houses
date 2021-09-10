@@ -1,11 +1,6 @@
-from tkinter import messagebox
 
 
-def create_messagebox(text, is_error=True):
-    if is_error:
-        messagebox.showerror(title="Saving Request", message=text)
-    else:
-        messagebox.showinfo(title="Saving Request", message=text)
+
 
 
 def save_data(input_widgets):

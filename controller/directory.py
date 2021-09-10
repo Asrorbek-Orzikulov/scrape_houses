@@ -1,18 +1,18 @@
-import os
-import pathlib
+from os import path, chdir, mkdir
+from pathlib import Path
 
 
 def main():
-    home_path = pathlib.Path.home()
-    os.chdir(home_path)
-    if os.path.isdir('Desktop'):
-        os.chdir('Desktop')
+    home_path = Path.home()
+    chdir(home_path)
+    if path.isdir('Desktop'):
+        chdir('Desktop')
     else:
-        os.mkdir('Desktop')
-        os.chdir('Desktop')
+        mkdir('Desktop')
+        chdir('Desktop')
 
-    if os.path.isdir('Housing_Scrape'):
-        os.chdir('Housing_Scrape')
+    if path.isdir('Housing_Scrape'):
+        chdir('Housing_Scrape')
     else:
-        os.mkdir('Housing_Scrape')
-        os.chdir('Housing_Scrape')
+        mkdir('Housing_Scrape')
+        chdir('Housing_Scrape')
