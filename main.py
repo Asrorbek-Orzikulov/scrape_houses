@@ -39,18 +39,21 @@ month_dict = {" г.": "", ' января ': '-01-', ' февраля ': '-02-', 
               ' октября ': '-10-', ' ноября ': '-11-', ' декабря ': '-12-',
               re.compile("^Сегодня.*"): today, re.compile("^Вчера.*"): yesterday}
 
+month_regex = re.compile("|".join(map(re.escape, month_dict.keys())))
+
 
 def scrape_announcement(dataframe, url):
     """
     Scrape an individual OLX announcement given its url.
 
-    Modifies the dataframe that is passed as an argument.    
+    Adds a row to the end the dataframe that is passed as an argument. That
+    row will contain information gathered from the announcement.
 
     Parameters
     ----------
     dataframe : pandas DataFrame
-        Dataframe whose rows will contain the information gathered 
-        from the announcements.
+        Dataframe whose rows contain information gathered from the
+        current and previous announcements.
     url : str
         url of the OLX announcement to be scraped.
 
@@ -76,6 +79,7 @@ def scrape_announcement(dataframe, url):
     try:
         date = html_selector.xpath('//*[@id="root"]/div[1]/div[3]/div[2]/div[1]/div[2]/div[1]/span/span')
         date = date.xpath(".//text()").extract_first()
+        date = month_regex.sub(lambda match: month_dict[match.group(0)], date)
         dataframe.at[row, 'date'] = date
     except:
         pass
@@ -181,7 +185,7 @@ def scrape_announcement(dataframe, url):
         furnished_pattern = re.compile(r"Меблирована: (.*)")
         furnished = list(filter(furnished_pattern.match, other_details))[0]
         furnished = re.sub(furnished_pattern, r"\1", furnished)
-        dataframe.at[row, 'furnished'] = furnished
+        dataframe.at[row, 'furnished'] = {'Да': True, 'Нет': False}.get(furnished)
     except:
         pass
 
@@ -211,7 +215,7 @@ def scrape_announcement(dataframe, url):
         commission_pattern = re.compile(r"Комиссионные: (.*)")
         commission = list(filter(commission_pattern.match, other_details))[0]
         commission = re.sub(commission_pattern, r"\1", commission)
-        dataframe.at[row, 'commission'] = commission
+        dataframe.at[row, 'commission'] = {'Да': True, 'Нет': False}.get(commission)
     except:
         pass
 
@@ -277,6 +281,8 @@ def scrape_announcement(dataframe, url):
     else:
         dataframe.at[row, 'supermarket'] = False
 
+    dataframe.at[row, 'price_m2'] = dataframe.at[row, 'price'].div(dataframe.at[row, 'area'])
+
 
 def scrape_page(df, section_url, page, included_ads):
     """
@@ -289,7 +295,7 @@ def scrape_page(df, section_url, page, included_ads):
     Parameters
     ----------
     df : pandas DataFrame
-        Dataframe whose rows will contain the information gathered from
+        Dataframe whose rows will contain information gathered from
         individual announcements.
     section_url : str
         url of the OLX section to be scraped.
@@ -329,7 +335,7 @@ def scrape_section(df, commission, furnished, home_type, district_code, included
     Parameters
     ----------
     df : pandas DataFrame
-        Dataframe whose rows will contain the information gathered from
+        Dataframe whose rows will contain information gathered from
         individual announcements.
     commission : str
         `yes` or `no` depending on if a broker commission is paid upon purchase.
@@ -380,19 +386,20 @@ def scrape_everything():
     """
     home_path = Path.home()
     chdir(path.join(home_path, "Downloads"))
-    database_name = f'{today} database.xlsx'
-    column_names = ['link', 'date', 'price', 'home_type', 'district',
+    database_name_pkl = f'{today} database.pkl.zip'
+    database_name_excel = f'{today} database.xlsx'
+    column_names = ['link', 'date', 'price', 'home_type', 'district', 'price_m2',
                     'furnished', 'commission', 'num_rooms', 'area', 'apart_floor',
                     'home_floor', 'condition', 'build_type', 'build_plan',
                     'build_year', 'bathroom', 'ceil_height', 'hospital', 
                     'playground', 'kindergarten', 'park', 'recreation', 'school',
                     'restaurant', 'supermarket', 'title_text', 'post_text']
-    if path.isfile(database_name):
-        df = pd.read_excel(database_name)
-        included_ads = set(df.link)
+    if path.isfile(database_name_excel):
+        df = pd.read_excel(database_name_excel)
+        # included_ads = set(df.link)
     else:
         df = pd.DataFrame(columns=column_names)
-        included_ads = set()
+        # included_ads = set()
 
     commission_list = ['yes', 'no']
     furnished_list = ['yes', 'no']
@@ -407,21 +414,23 @@ def scrape_everything():
                     try:
                         scrape_section(df, commission, furnished, home_type,
                                        district_code, included_ads)
-                        df.to_excel(database_name, index=False, encoding="utf-8")
+                        df.to_pickle(database_name_pkl)
                     except:
                         pass
                     finally:
                         print(f'Number of observations scraped: {len(df)}.')
 
-    df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
-        ['Да', 'Нет'], [True, False])
-    df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
-    df['price_m2'] = df['price'].div(df['area'])
-    df.drop_duplicates(subset=column_names, inplace=True)
+    # df.loc[:, ['furnished', 'commission']] = df.loc[:, ['furnished', 'commission']].replace(
+    #     ['Да', 'Нет'], [True, False])
+    # df.loc[:, 'date'] = df.loc[:, 'date'].replace(month_dict, regex=True)
+    # df.loc[:, 'price_m2'] = df['price'].div(df['area'])
+    # df.drop_duplicates(subset=column_names, inplace=True)
     # df.dropna(how="all", inplace=True,
     #           subset=["price", 'num_rooms', 'area', 'apart_floor', 'home_floor'])
-    df.to_excel(database_name, index=False, encoding="utf-8")
+    # df.to_excel(database_name_excel, index=False, encoding="utf-8")
     return df
 
 
 data = scrape_everything()
+
+
