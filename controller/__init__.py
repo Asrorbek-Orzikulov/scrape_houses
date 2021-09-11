@@ -1,5 +1,5 @@
-from .directory import main as _directory
+from .directory import main as create_directory
 
 
 def main():
-    _directory()
+    create_directory()
