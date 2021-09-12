@@ -374,7 +374,7 @@ class ScraperOLX:
 
     def scrape_everything(self):
         """
-        Scrape all announcements on OLX.uz that are about the sale of
+        Scrape all announcements at www.olx.uz that are about the sale of
         apartments in Tashkent.
 
         Creates a `temporary_files` folder if it does not exist. There,

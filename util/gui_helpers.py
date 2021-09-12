@@ -121,7 +121,7 @@ def create_excel(date):
     Merge all pickle files in the `Database` folder of the form
     `dd-mm-yyyy-merged.pkl` into one Excel file, dropping duplicates.
 
-    Creates a Excel file with the name `date-merged.xlsx` and
+    Creates an Excel file with the name `date-merged.xlsx` and
     saves it in the `Database` folder.
 
     Parameters
