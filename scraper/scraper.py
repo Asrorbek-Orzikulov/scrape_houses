@@ -236,7 +236,12 @@ class ScraperOLX:
 
         try:
             content = html_selector.xpath('//*[@id="root"]/div[1]/div[3]/div[2]/div[1]/div[2]/div[8]/div')
-            content = content.xpath('.//text()').extract_first()
+            content = content.xpath('.//text()').extract()
+            if len(content) > 3:
+                content = content[:3]
+
+            content = '. '.join(content)
+            content = content.replace('\n', '')
             dataframe.at[row, 'post_text'] = content
         except:
             pass

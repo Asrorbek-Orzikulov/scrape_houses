@@ -10,21 +10,21 @@ root = Tk()
 root.title("Scraping Apartment Prices")
 root_width = root.winfo_screenwidth() - 15
 root_height = root.winfo_screenheight() - 70
-root.geometry("400x210")
+root.geometry("400x230")
 main_frame = Frame(root)
 main_frame.pack(fill=BOTH, expand=True, pady=10)
 
 button_scrape = Button(
-    main_frame, text="Scrape Info", width=30, bg='green', fg='black',
+    main_frame, text="Scrape Info", width=30, bg='#3DC70D', fg='black',
     command=scraper.scrape_everything)
 button_change_yesterday = Button(
-    main_frame, text="Change Yesterday's Files", width=30, bg='green', fg='black',
+    main_frame, text="Change Yesterday's Files", width=30, bg='#3DC70D', fg='black',
     command=lambda: util.update_yesterday(scraper.yesterday, scraper.today))
 button_merge_district = Button(
-    main_frame, text="Merge Districts", width=30, bg='green', fg='black',
+    main_frame, text="Merge Districts", width=30, bg='#3DC70D', fg='black',
     command=lambda: util.merge_district_pickles(scraper.today))
 button_make_excel = Button(
-    main_frame, text="Make Excel", width=30, bg='green', fg='black',
+    main_frame, text="Make Excel", width=30, bg='#3DC70D', fg='black',
     command=lambda: util.create_excel(scraper.today))
 
 buttons = [button_scrape, button_change_yesterday,

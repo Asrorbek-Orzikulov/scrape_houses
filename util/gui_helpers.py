@@ -110,7 +110,7 @@ def merge_month_pickles():
     create_messagebox(f'Found {len(all_filenames)} files to merge.', False)
     merged_data = concat([read_pickle(file) for file in all_filenames])
     merged_data.drop_duplicates(
-        subset=['link', 'price', 'num_rooms', 'area', 'home_type', 'district'],
+        subset=['price', 'num_rooms', 'area', 'home_type', 'district', 'post_text'],
         inplace=True
     )
     return merged_data
