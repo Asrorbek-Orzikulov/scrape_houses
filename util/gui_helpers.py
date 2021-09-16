@@ -113,6 +113,13 @@ def merge_month_pickles():
         subset=['price', 'num_rooms', 'area', 'home_type', 'district', 'post_text'],
         inplace=True
     )
+
+    # data pre-processing
+    filter_conditions = '(area >= 30) and (area <= 310) and (price_m2 >= 300)'\
+        ' and (apart_floor <= home_floor) and (num_rooms <= 8)'
+    merged_data = merged_data.query(filter_conditions)
+    merged_data[['day', 'month', 'year']] = merged_data.date.str.split(
+        pat="-", expand=True)
     return merged_data
 
 
